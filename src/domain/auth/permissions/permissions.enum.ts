@@ -1,0 +1,18 @@
+export enum Permissions {
+  // User Management
+  MANAGE_USERS = 'MANAGE_USERS',
+  VIEW_USERS = 'VIEW_USERS',
+  
+  // Sales
+  CREATE_SALE = 'CREATE_SALE',
+  VIEW_SALES = 'VIEW_SALES',
+  REFUND_SALE = 'REFUND_SALE',
+  
+  // Inventory
+  MANAGE_INVENTORY = 'MANAGE_INVENTORY',
+  VIEW_INVENTORY = 'VIEW_INVENTORY',
+  
+  // Reports
+  VIEW_REPORTS = 'VIEW_REPORTS',
+  EXPORT_REPORTS = 'EXPORT_REPORTS',
+}

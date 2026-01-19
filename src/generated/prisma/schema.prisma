@@ -1,0 +1,85 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  passwordHash String
+  role         UserRole  @default(CASHIER)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sales Sale[]
+}
+
+enum UserRole {
+  CASHIER
+  MANAGER
+  ADMIN
+}
+
+model Product {
+  id        Int      @id @default(autoincrement())
+  name      String
+  sku       String   @unique
+  category  String
+  size      String
+  color     String
+  price     Float
+  stock     Int
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  saleItems SaleItem[]
+
+  @@index([category])
+  @@index([sku])
+}
+
+model Sale {
+  id          Int         @id @default(autoincrement())
+  userId      Int
+  total       Float
+  discount    Float       @default(0)
+  paymentType PaymentType
+  createdAt   DateTime    @default(now())
+
+  user  User       @relation(fields: [userId], references: [id])
+  items SaleItem[]
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model SaleItem {
+  id        Int   @id @default(autoincrement())
+  saleId    Int
+  productId Int
+  quantity  Int
+  price     Float // price at time of sale
+  discount  Float @default(0)
+
+  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+enum PaymentType {
+  CASH
+  CARD
+  TRANSFER
+}
