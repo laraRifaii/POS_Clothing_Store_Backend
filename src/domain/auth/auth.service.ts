@@ -1,60 +1,33 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { SignInDto } from './dto/signIn.dto';
-import { RegisterDto } from './dto/register.dto';
+// backend/src/auth/auth.service.ts
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { PrismaService } from 'src/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client';
+import { RegisterDto } from './dto/register.dto';
+import { SignInDto } from './dto/signIn.dto';
 
 @Injectable()
 export class AuthService {
   constructor(private prisma: PrismaService) {}
 
-  // -------------------------
-  // REGISTER USER (Admin only)
-  // -------------------------
-  async signup(dto: RegisterDto) {
-    const passwordHash = await bcrypt.hash(dto.password, 10);
-
-    try {
-      const user = await this.prisma.user.create({
-        data: {
-          username: dto.username,
-          passwordHash,
-          role: dto.role ?? 'CASHIER',
-        },
-      });
-
-      const { passwordHash: _, ...safeUser } = user;
-      return {
-        message: 'User created successfully',
-        user: safeUser,
-      };
-    } catch (error) {
-      if (error instanceof PrismaClientKnownRequestError) {
-        if (error.code === 'P2002') {
-          throw new ForbiddenException('Username already exists');
-        }
-      }
-      throw error;
-    }
-  }
-
-  // -------------------------
-  // LOGIN
-  // -------------------------
+  /**
+   * Sign in
+   */
   async signin(dto: SignInDto) {
     const user = await this.prisma.user.findUnique({
       where: { username: dto.username },
     });
 
-    if (!user || !user.isActive) {
-      throw new ForbiddenException('Invalid credentials');
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
 
-    const passwordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!user.isActive) {
+      throw new BadRequestException('User account is inactive');
+    }
 
-    if (!passwordValid) {
-      throw new ForbiddenException('Invalid credentials');
+    const passwordMatch = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!passwordMatch) {
+      throw new BadRequestException('Invalid credentials');
     }
 
     // Update last login
@@ -63,133 +36,126 @@ export class AuthService {
       data: { lastLoginAt: new Date() },
     });
 
-    const { passwordHash: _, ...safeUser } = user;
-
-    return {
-      message: 'Login successful',
-      user: safeUser,
-    };
+    // Return user without password
+    const { passwordHash, ...userWithoutPassword } = user;
+    return { user: userWithoutPassword };
   }
 
-  // -------------------------
-  // LOGOUT
-  // -------------------------
-  async logout() {
-    return { message: 'Logged out successfully' };
-  }
+  /**
+   * Sign up (Admin only)
+   */
+  async signup(dto: RegisterDto) {
+    // Check if username already exists
+    const existingUser = await this.prisma.user.findUnique({
+      where: { username: dto.username },
+    });
 
-  // -------------------------
-  // GET ALL USERS
-  // -------------------------
-  async findAll() {
-    const users = await this.prisma.user.findMany({
-      select: {
-        id: true,
-        username: true,
-        role: true,
-        isActive: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-        // Exclude passwordHash
+    if (existingUser) {
+      throw new ConflictException('Username already exists');
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+
+    // Create user
+    const user = await this.prisma.user.create({
+      data: {
+        username: dto.username,
+        passwordHash,
+        role: dto.role,
       },
     });
 
-    return {
-      message: 'Users retrieved successfully',
-      count: users.length,
-      users,
-    };
+    // Return user without password
+    const { passwordHash: _, ...userWithoutPassword } = user;
+    return userWithoutPassword;
   }
 
-  // -------------------------
-  // GET USER BY ID
-  // -------------------------
+  /**
+   * Find all users
+   */
+  async findAll() {
+    const users = await this.prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Remove password hash from all users
+    return users.map(user => {
+      const { passwordHash, ...userWithoutPassword } = user;
+      return userWithoutPassword;
+    });
+  }
+
+  /**
+   * Find user by ID
+   */
   async findById(id: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      select: {
-        id: true,
-        username: true,
-        role: true,
-        isActive: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-        // Exclude passwordHash
-      },
     });
 
     if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+      throw new NotFoundException('User not found');
     }
 
-    return {
-      message: 'User retrieved successfully',
-      user,
-    };
+    const { passwordHash, ...userWithoutPassword } = user;
+    return userWithoutPassword;
   }
 
-  // -------------------------
-  // UPDATE USER
-  // -------------------------
+  /**
+   * Update user
+   */
   async update(id: number, dto: Partial<RegisterDto>) {
-    // Check if user exists
-    const existingUser = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { id },
     });
 
-    if (!existingUser) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check if username is being changed and if it already exists
+    if (dto.username && dto.username !== user.username) {
+      const existingUser = await this.prisma.user.findUnique({
+        where: { username: dto.username },
+      });
+
+      if (existingUser) {
+        throw new ConflictException('Username already exists');
+      }
     }
 
     // Prepare update data
     const updateData: any = {};
-
-    if (dto.username) {
-      updateData.username = dto.username;
-    }
-
+    
+    if (dto.username) updateData.username = dto.username;
+    if (dto.role) updateData.role = dto.role;
+    
+    // Only update password if provided
     if (dto.password) {
       updateData.passwordHash = await bcrypt.hash(dto.password, 10);
     }
 
-    if (dto.role) {
-      updateData.role = dto.role;
-    }
+    // Update user
+    const updatedUser = await this.prisma.user.update({
+      where: { id },
+      data: updateData,
+    });
 
-    try {
-      const user = await this.prisma.user.update({
-        where: { id },
-        data: updateData,
-      });
-
-      const { passwordHash: _, ...safeUser } = user;
-
-      return {
-        message: 'User updated successfully',
-        user: safeUser,
-      };
-    } catch (error) {
-      if (error instanceof PrismaClientKnownRequestError) {
-        if (error.code === 'P2002') {
-          throw new ForbiddenException('Username already exists');
-        }
-      }
-      throw error;
-    }
+    const { passwordHash, ...userWithoutPassword } = updatedUser;
+    return userWithoutPassword;
   }
 
-  // -------------------------
-  // TOGGLE USER ACTIVE STATUS
-  // -------------------------
+  /**
+   * Toggle active status
+   */
   async toggleActive(id: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
     });
 
     if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+      throw new NotFoundException('User not found');
     }
 
     const updatedUser = await this.prisma.user.update({
@@ -197,57 +163,64 @@ export class AuthService {
       data: { isActive: !user.isActive },
     });
 
-    const { passwordHash: _, ...safeUser } = updatedUser;
-
-    return {
-      message: `User ${safeUser.isActive ? 'activated' : 'deactivated'} successfully`,
-      user: safeUser,
-    };
+    const { passwordHash, ...userWithoutPassword } = updatedUser;
+    return userWithoutPassword;
   }
 
-  // -------------------------
-  // DELETE USER (Soft delete by deactivating)
-  // -------------------------
+  /**
+   * Soft delete (set inactive)
+   */
   async delete(id: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
     });
 
     if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+      throw new NotFoundException('User not found');
     }
 
-    // Soft delete: just deactivate
     await this.prisma.user.update({
       where: { id },
       data: { isActive: false },
     });
 
-    return {
-      message: 'User deleted successfully',
-      userId: id,
-    };
+    return { message: 'User deactivated successfully' };
   }
 
-  // -------------------------
-  // HARD DELETE USER (Use with caution!)
-  // -------------------------
+  /**
+   * Hard delete (permanently remove)
+   */
   async hardDelete(id: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
     });
 
     if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+      throw new NotFoundException('User not found');
+    }
+
+    // Check if user has any sales
+    const salesCount = await this.prisma.sale.count({
+      where: { userId: id },
+    });
+
+    if (salesCount > 0) {
+      throw new BadRequestException(
+        'Cannot delete user with existing sales. Use soft delete instead.'
+      );
     }
 
     await this.prisma.user.delete({
       where: { id },
     });
 
-    return {
-      message: 'User permanently deleted',
-      userId: id,
-    };
+    return { message: 'User deleted permanently' };
+  }
+
+  /**
+   * Logout (placeholder - session handled by frontend)
+   */
+  async logout() {
+    return { message: 'Logged out successfully' };
   }
 }

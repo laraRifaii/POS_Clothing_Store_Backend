@@ -1,13 +1,13 @@
-import { 
-  Body, 
-  Controller, 
-  Post, 
-  Get, 
-  Put, 
-  Delete, 
-  Param, 
+import {
+  Body,
+  Controller,
+  Post,
+  Get,
+  Put,
+  Delete,
+  Param,
   ParseIntPipe,
-  UseGuards 
+  UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -19,6 +19,7 @@ import { AuthGuard } from './guards/auth.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
 import { Permission } from './decorators/permissions.decorator';
 import { Permissions } from './permissions/permissions.enum';
+import { SessionAuthGuard } from './guards/session-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -27,7 +28,7 @@ export class AuthController {
   // -------------------------
   // PUBLIC ROUTES
   // -------------------------
-  
+
   @Post('signin')
   async signin(@Body() dto: SignInDto) {
     return this.authService.signin(dto);
@@ -43,7 +44,7 @@ export class AuthController {
   // -------------------------
 
   @Post('signup')
-  @UseGuards(AuthGuard, RolesGuard, PermissionsGuard)
+  @UseGuards(SessionAuthGuard, AuthGuard, RolesGuard, PermissionsGuard)
   @Permission(Permissions.MANAGE_USERS)
   @Roles(UserRole.ADMIN)
   signup(@Body() dto: RegisterDto) {
@@ -70,7 +71,7 @@ export class AuthController {
   @Roles(UserRole.ADMIN)
   async update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: Partial<RegisterDto>
+    @Body() dto: Partial<RegisterDto>,
   ) {
     return this.authService.update(id, dto);
   }

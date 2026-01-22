@@ -15,4 +15,7 @@ export enum Permissions {
   // Reports
   VIEW_REPORTS = 'VIEW_REPORTS',
   EXPORT_REPORTS = 'EXPORT_REPORTS',
+
+  // Settings
+  MANAGE_SETTINGS = 'MANAGE_SETTINGS',
 }

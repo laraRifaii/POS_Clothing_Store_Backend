@@ -4,15 +4,24 @@ import * as bcrypt from 'bcrypt';
 import { AuthService } from './domain/auth/auth.service';
 import { UserRole } from './domain/auth/enums/user-role.enum';
 import { ValidationPipe } from '@nestjs/common';
+import { join } from 'path';
+import { NestExpressApplication } from '@nestjs/platform-express';
+
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-   // Enable CORS
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Serve uploaded files
+  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+    prefix: '/uploads/',
+  });
+
+  // Enable CORS
   app.enableCors({
     origin: 'http://localhost:5173', // frontend URL
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     credentials: true, // if you need cookies/auth headers
   });
-   app.useGlobalPipes(
+  app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
@@ -40,7 +49,6 @@ async function bootstrap() {
   // console.log('Admin user created successfully!');
   // process.exit(0);
 
-  
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

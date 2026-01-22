@@ -1,19 +1,29 @@
-import { IsString, IsNumber } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean, Min, IsInt } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateProductDto {
   @IsString()
   name: string;
+
   @IsString()
   sku: string;
+
   @IsString()
   category: string;
+
   @IsString()
   size: string;
+
   @IsString()
   color: string;
 
   @IsNumber()
+  @Min(0)
   price: number;
-  @IsNumber()
+
+  @IsInt()
+  @Min(0)
   stock: number;
 }
+
+
