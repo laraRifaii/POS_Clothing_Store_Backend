@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { SaleQueryDto } from './dto/sale-query.dto';
@@ -25,7 +29,9 @@ export class SaleService {
     });
 
     if (products.length !== productIds.length) {
-      throw new BadRequestException('One or more products not found or inactive');
+      throw new BadRequestException(
+        'One or more products not found or inactive',
+      );
     }
 
     // Create a map for quick lookup
@@ -35,7 +41,7 @@ export class SaleService {
     let subtotal = 0;
     const saleItems = items.map((item) => {
       const product = productMap.get(item.productId);
-      
+
       if (!product) {
         throw new BadRequestException(`Product ${item.productId} not found`);
       }
@@ -50,7 +56,7 @@ export class SaleService {
         throw new BadRequestException('Quantity must be greater than 0');
       }
 
-      const itemPrice = item.price ?? product.price;
+      const itemPrice = item.price ?? product.salePrice;
       const itemDiscount = item.discount ?? 0;
 
       if (itemDiscount < 0 || itemDiscount > itemPrice) {
@@ -64,6 +70,7 @@ export class SaleService {
         productId: item.productId,
         quantity: item.quantity,
         price: itemPrice,
+        costPrice: product.costPrice, // Store cost price for profit calculation
         discount: itemDiscount,
       };
     });
@@ -168,6 +175,13 @@ export class SaleService {
       }),
       this.prisma.sale.count({ where }),
     ]);
+    if (total === 0 || sales.length === 0) {
+      return {
+        sales: [],
+        total: 0,
+        message: 'No sales recorded yet',
+      };
+    }
 
     return { sales, total };
   }
@@ -205,9 +219,13 @@ export class SaleService {
       },
     };
 
-    const [sales, totalSales, totalRevenue, paymentBreakdown] = await Promise.all([
-      this.prisma.sale.count({ where }),
-      this.prisma.sale.findMany({ where }),
+    const [sales, totalRevenue, paymentBreakdown] = await Promise.all([
+      this.prisma.sale.findMany({
+        where,
+        include: {
+          items: true,
+        },
+      }),
       this.prisma.sale.aggregate({
         where,
         _sum: { total: true },
@@ -220,6 +238,21 @@ export class SaleService {
       }),
     ]);
 
+    // Calculate total cost and profit
+    let totalCost = 0;
+    let totalDiscount = 0;
+
+    sales.forEach((sale) => {
+      totalDiscount += sale.discount;
+      sale.items.forEach((item) => {
+        totalCost += item.costPrice * item.quantity;
+      });
+    });
+
+    const revenue = totalRevenue._sum.total || 0;
+    const grossProfit = revenue - totalCost;
+    const profitMargin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
+
     // Get top selling products
     const topProducts = await this.prisma.saleItem.groupBy({
       by: ['productId'],
@@ -231,7 +264,9 @@ export class SaleService {
           },
         },
       },
-      _sum: { quantity: true },
+      _sum: {
+        quantity: true,
+      },
       orderBy: { _sum: { quantity: 'desc' } },
       take: 10,
     });
@@ -243,14 +278,62 @@ export class SaleService {
 
     const productMap = new Map(products.map((p) => [p.id, p]));
 
-    const topSellingProducts = topProducts.map((item) => ({
-      product: productMap.get(item.productId),
-      quantitySold: item._sum.quantity,
-    }));
+    // Get detailed sales data for top products to calculate their profit
+    const topProductSales = await this.prisma.saleItem.findMany({
+      where: {
+        productId: { in: productIds },
+        sale: {
+          createdAt: {
+            gte: new Date(startDate),
+            lte: new Date(endDate),
+          },
+        },
+      },
+    });
+
+    // Calculate profit per product
+    const productProfitMap = new Map<
+      number,
+      { revenue: number; cost: number }
+    >();
+
+    topProductSales.forEach((item) => {
+      const existing = productProfitMap.get(item.productId) || {
+        revenue: 0,
+        cost: 0,
+      };
+      existing.revenue += (item.price - item.discount) * item.quantity;
+      existing.cost += item.costPrice * item.quantity;
+      productProfitMap.set(item.productId, existing);
+    });
+
+    const topSellingProducts = topProducts.map((item) => {
+      const product = productMap.get(item.productId);
+      const profitData = productProfitMap.get(item.productId) || {
+        revenue: 0,
+        cost: 0,
+      };
+      const profit = profitData.revenue - profitData.cost;
+      const margin =
+        profitData.revenue > 0 ? (profit / profitData.revenue) * 100 : 0;
+
+      return {
+        product,
+        quantitySold: item._sum.quantity,
+        revenue: profitData.revenue,
+        cost: profitData.cost,
+        profit,
+        profitMargin: margin,
+      };
+    });
 
     return {
-      totalSales: sales,
-      totalRevenue: totalRevenue._sum.total || 0,
+      totalSales: sales.length,
+      totalRevenue: revenue,
+      totalCost,
+      grossProfit,
+      profitMargin,
+      totalDiscount,
       paymentBreakdown: paymentBreakdown.map((p) => ({
         paymentType: p.paymentType,
         count: p._count,
@@ -269,6 +352,63 @@ export class SaleService {
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
-    return this.getSalesReport(startOfDay.toISOString(), endOfDay.toISOString());
+    return this.getSalesReport(
+      startOfDay.toISOString(),
+      endOfDay.toISOString(),
+    );
+  }
+
+  async getProfitByCategory(startDate: string, endDate: string) {
+    const saleItems = await this.prisma.saleItem.findMany({
+      where: {
+        sale: {
+          createdAt: {
+            gte: new Date(startDate),
+            lte: new Date(endDate),
+          },
+        },
+      },
+      include: {
+        product: true,
+      },
+    });
+
+    const categoryMap = new Map<
+      string,
+      { revenue: number; cost: number; quantity: number }
+    >();
+
+    saleItems.forEach((item) => {
+      const category = item.product.category;
+      const existing = categoryMap.get(category) || {
+        revenue: 0,
+        cost: 0,
+        quantity: 0,
+      };
+
+      existing.revenue += (item.price - item.discount) * item.quantity;
+      existing.cost += item.costPrice * item.quantity;
+      existing.quantity += item.quantity;
+
+      categoryMap.set(category, existing);
+    });
+
+    const categoryBreakdown = Array.from(categoryMap.entries()).map(
+      ([category, data]) => {
+        const profit = data.revenue - data.cost;
+        const margin = data.revenue > 0 ? (profit / data.revenue) * 100 : 0;
+
+        return {
+          category,
+          revenue: data.revenue,
+          cost: data.cost,
+          profit,
+          profitMargin: margin,
+          itemsSold: data.quantity,
+        };
+      },
+    );
+
+    return categoryBreakdown.sort((a, b) => b.profit - a.profit);
   }
 }

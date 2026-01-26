@@ -37,7 +37,8 @@ model Product {
   category  String
   size      String
   color     String
-  price     Float
+  costPrice Float      // Unit/wholesale price (what you paid)
+  salePrice Float      // Retail price (what you sell for)
   stock     Int
   isActive  Boolean    @default(true)
   createdAt DateTime   @default(now())
@@ -70,7 +71,8 @@ model SaleItem {
   saleId    Int
   productId Int
   quantity  Int
-  price     Float // price at time of sale
+  price     Float      // Sale price at time of sale
+  costPrice Float      // Cost price at time of sale (for profit calculation)
   discount  Float   @default(0)
 
   sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
@@ -130,7 +132,7 @@ model StoreInfo{
   address String
   phone   String
   email   String
-logoUrl String?
+  logoUrl String?
 
    @@map("store_info")
 }

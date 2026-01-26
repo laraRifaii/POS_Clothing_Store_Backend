@@ -1,10 +1,15 @@
 // backend/src/auth/auth.service.ts
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { RegisterDto } from './dto/register.dto';
 import { SignInDto } from './dto/signIn.dto';
-
+import { UserRole } from './enums/user-role.enum';
 @Injectable()
 export class AuthService {
   constructor(private prisma: PrismaService) {}
@@ -80,7 +85,7 @@ export class AuthService {
     });
 
     // Remove password hash from all users
-    return users.map(user => {
+    return users.map((user) => {
       const { passwordHash, ...userWithoutPassword } = user;
       return userWithoutPassword;
     });
@@ -127,10 +132,10 @@ export class AuthService {
 
     // Prepare update data
     const updateData: any = {};
-    
+
     if (dto.username) updateData.username = dto.username;
     if (dto.role) updateData.role = dto.role;
-    
+
     // Only update password if provided
     if (dto.password) {
       updateData.passwordHash = await bcrypt.hash(dto.password, 10);
@@ -179,6 +184,22 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
+    // Prevent deleting the last admin
+    if (user.role === UserRole.ADMIN) {
+      const activeAdminCount = await this.prisma.user.count({
+        where: {
+          role: UserRole.ADMIN,
+          isActive: true,
+        },
+      });
+
+      if (activeAdminCount <= 1) {
+        throw new BadRequestException(
+          'Cannot deactivate the last admin user. Create another admin first.',
+        );
+      }
+    }
+
     await this.prisma.user.update({
       where: { id },
       data: { isActive: false },
@@ -199,6 +220,22 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
+    // Prevent deleting the last admin
+    if (user.role === UserRole.ADMIN) {
+      const activeAdminCount = await this.prisma.user.count({
+        where: {
+          role: UserRole.ADMIN,
+          isActive: true,
+        },
+      });
+
+      if (activeAdminCount <= 1) {
+        throw new BadRequestException(
+          'Cannot delete the last admin user. Create another admin first.',
+        );
+      }
+    }
+
     // Check if user has any sales
     const salesCount = await this.prisma.sale.count({
       where: { userId: id },
@@ -206,7 +243,7 @@ export class AuthService {
 
     if (salesCount > 0) {
       throw new BadRequestException(
-        'Cannot delete user with existing sales. Use soft delete instead.'
+        'Cannot delete user with existing sales. Use soft delete instead.',
       );
     }
 
@@ -217,6 +254,24 @@ export class AuthService {
     return { message: 'User deleted permanently' };
   }
 
+  /**
+   * Prevent deleting yourself
+   */
+  async deleteWithAuth(id: number, currentUserId: number) {
+    if (id === currentUserId) {
+      throw new BadRequestException('You cannot delete your own account');
+    }
+
+    return this.delete(id);
+  }
+
+  async hardDeleteWithAuth(id: number, currentUserId: number) {
+    if (id === currentUserId) {
+      throw new BadRequestException('You cannot delete your own account');
+    }
+
+    return this.hardDelete(id);
+  }
   /**
    * Logout (placeholder - session handled by frontend)
    */

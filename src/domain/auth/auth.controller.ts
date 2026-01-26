@@ -7,6 +7,7 @@ import {
   Delete,
   Param,
   ParseIntPipe,
+  Request,
   UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
@@ -88,15 +89,18 @@ export class AuthController {
   @UseGuards(AuthGuard, RolesGuard, PermissionsGuard)
   @Permission(Permissions.MANAGE_USERS)
   @Roles(UserRole.ADMIN)
-  async delete(@Param('id', ParseIntPipe) id: number) {
-    return this.authService.delete(id);
+  async delete(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any, // Get current user from request
+  ) {
+    return this.authService.deleteWithAuth(id, req.user.id);
   }
 
   @Delete('users/:id/hard')
   @UseGuards(AuthGuard, RolesGuard, PermissionsGuard)
   @Permission(Permissions.MANAGE_USERS)
   @Roles(UserRole.ADMIN)
-  async hardDelete(@Param('id', ParseIntPipe) id: number) {
-    return this.authService.hardDelete(id);
+  async hardDelete(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    return this.authService.hardDeleteWithAuth(id, req.user.id);
   }
 }

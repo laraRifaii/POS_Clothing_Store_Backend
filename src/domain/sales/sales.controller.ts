@@ -35,7 +35,7 @@ export class SalesController {
     return this.saleService.findAll(query);
   }
 
-  @Get('report')
+  @Get('reports')
   @Roles(UserRole.MANAGER, UserRole.ADMIN)
   getReport(
     @Query('startDate') startDate: string,
@@ -54,5 +54,14 @@ export class SalesController {
   @Roles(UserRole.MANAGER, UserRole.ADMIN)
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.saleService.findOne(id);
+  }
+
+  @Get('reports/category-profit')
+  @Roles(UserRole.MANAGER, UserRole.ADMIN)
+  getCategoryProfit(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    return this.saleService.getProfitByCategory(startDate, endDate);
   }
 }
