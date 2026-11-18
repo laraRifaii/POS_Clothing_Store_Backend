@@ -14,11 +14,11 @@ import { PaymentType } from '../shared/paymentType.enum';
 
 export class SaleItemDto {
   @IsInt()
-  productId: number;
+  productId!: number;
 
   @IsInt()
   @Min(1)
-  quantity: number;
+  quantity!: number;
 
   @IsOptional()
   @IsNumber()
@@ -35,10 +35,10 @@ export class CreateSaleDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SaleItemDto)
-  items: SaleItemDto[];
+  items!: SaleItemDto[];
 
   @IsEnum(PaymentType)
-  paymentType: PaymentType;
+  paymentType!: PaymentType;
 
   @IsOptional()
   @IsNumber()

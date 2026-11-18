@@ -4,21 +4,17 @@ import { ValidationPipe } from '@nestjs/common';
 import { join } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 
-
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  // app.useGlobalFilters(new PrismaExceptionFilter());
 
-  // Serve uploaded files
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
     prefix: '/uploads/',
   });
 
-  // Enable CORS
   app.enableCors({
-    origin: 'http://localhost:5173', // frontend URL
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    credentials: true, // if you need cookies/auth headers
+    origin: true,
+    methods: ['GET','HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    credentials: true,
   });
   
   app.useGlobalPipes(
@@ -29,7 +25,10 @@ async function bootstrap() {
     }),
   );
 
-
-  await app.listen(process.env.PORT ?? 3000);
+  const port = process.env.PORT || 3000;
+  await app.listen(port, '127.0.0.1');
+  
+  console.log('✅ Backend running on http://127.0.0.1:' + port);
 }
+
 bootstrap();

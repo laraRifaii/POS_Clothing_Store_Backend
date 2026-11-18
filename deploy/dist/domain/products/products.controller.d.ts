@@ -1,0 +1,112 @@
+import { ProductsService } from './products.service';
+import { CreateProductDto } from './dto/create-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
+import { ProductQueryDto } from './dto/product-query.dto';
+export declare class ProductsController {
+    private readonly productService;
+    constructor(productService: ProductsService);
+    create(createProductDto: CreateProductDto): Promise<{
+        id: number;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        name: string;
+        sku: string;
+        category: string;
+        size: string;
+        color: string;
+        costPrice: number;
+        salePrice: number;
+        stock: number;
+    }>;
+    findAll(query: ProductQueryDto): Promise<{
+        products: import("@prisma/client").Product[];
+        total: number;
+        message?: string;
+    }>;
+    getCategories(): Promise<string[]>;
+    getLowStock(threshold?: number): Promise<{
+        id: number;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        name: string;
+        sku: string;
+        category: string;
+        size: string;
+        color: string;
+        costPrice: number;
+        salePrice: number;
+        stock: number;
+    }[]>;
+    findBySku(sku: string): Promise<{
+        id: number;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        name: string;
+        sku: string;
+        category: string;
+        size: string;
+        color: string;
+        costPrice: number;
+        salePrice: number;
+        stock: number;
+    }>;
+    findOne(id: number): Promise<{
+        id: number;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        name: string;
+        sku: string;
+        category: string;
+        size: string;
+        color: string;
+        costPrice: number;
+        salePrice: number;
+        stock: number;
+    }>;
+    update(id: number, updateProductDto: UpdateProductDto): Promise<{
+        id: number;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        name: string;
+        sku: string;
+        category: string;
+        size: string;
+        color: string;
+        costPrice: number;
+        salePrice: number;
+        stock: number;
+    }>;
+    updateStock(id: number, quantity: number): Promise<{
+        id: number;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        name: string;
+        sku: string;
+        category: string;
+        size: string;
+        color: string;
+        costPrice: number;
+        salePrice: number;
+        stock: number;
+    }>;
+    remove(id: number): Promise<{
+        id: number;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        name: string;
+        sku: string;
+        category: string;
+        size: string;
+        color: string;
+        costPrice: number;
+        salePrice: number;
+        stock: number;
+    }>;
+}

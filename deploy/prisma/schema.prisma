@@ -1,0 +1,138 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+ 
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  passwordHash String
+  role         UserRole  @default(CASHIER)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  sales        Sale[]
+  refunds      Refund[]
+}
+
+enum UserRole {
+  CASHIER
+  MANAGER
+  ADMIN
+}
+
+model Product {
+  id        Int        @id @default(autoincrement())
+  name      String
+  sku       String     @unique
+  category  String
+  size      String
+  color     String
+  costPrice Float      // Unit/wholesale price (what you paid)
+  salePrice Float      // Retail price (what you sell for)
+  stock     Int
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  saleItems SaleItem[]
+
+  @@index([category])
+  @@index([sku])
+}
+
+model Sale {
+  id          Int         @id @default(autoincrement())
+  userId      Int
+  total       Float
+  discount    Float       @default(0)
+  paymentType PaymentType
+  createdAt   DateTime    @default(now())
+
+  user        User        @relation(fields: [userId], references: [id])
+  items       SaleItem[]
+  refunds      Refund[]
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model SaleItem {
+  id        Int     @id @default(autoincrement())
+  saleId    Int
+  productId Int
+  quantity  Int
+  price     Float      // Sale price at time of sale
+  costPrice Float      // Cost price at time of sale (for profit calculation)
+  discount  Float   @default(0)
+
+  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+  refundItems RefundItem[]
+  
+  @@index([saleId])
+  @@index([productId])
+}
+
+enum PaymentType {
+  CASH
+  CARD
+  TRANSFER
+}
+model Refund {
+  id              Int           @id @default(autoincrement())
+  saleId          Int
+  userId          Int           // User who processed the refund
+  refundType      RefundType
+  reason          String
+  notes           String?
+  totalRefunded   Float
+  createdAt       DateTime      @default(now())
+
+  sale            Sale          @relation(fields: [saleId], references: [id])
+  user            User          @relation(fields: [userId], references: [id])
+  items           RefundItem[]
+
+  @@index([saleId])
+  @@index([userId])
+  @@index([createdAt])
+}
+model RefundItem {
+  id              Int       @id @default(autoincrement())
+  refundId        Int
+  saleItemId      Int
+  quantity        Int       // Quantity being refunded
+  refundAmount    Float     // Amount refunded for this item
+
+  refund          Refund    @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  saleItem        SaleItem  @relation(fields: [saleItemId], references: [id])
+
+  @@index([refundId])
+  @@index([saleItemId])
+}
+
+enum RefundType {
+  FULL      // Complete refund of entire sale
+  PARTIAL   // Partial refund of some items
+  EXCHANGE  // Exchange for other items (still processes as refund)
+}
+
+model StoreInfo{
+  id      Int    @id @default(autoincrement())
+  name    String
+  address String
+  phone   String
+  email   String
+  logoUrl String?
+
+   @@map("store_info")
+}
